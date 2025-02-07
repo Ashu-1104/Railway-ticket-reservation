@@ -37,6 +37,29 @@
                 document.getElementById("er_uname").innerHTML="";
                 document.getElementById("uname").style="border:none;box-shadow:none";           
             }
+            function validation() {
+                let fname = document.getElementById("fn").value.trim();
+                let mname = document.getElementById("mn").value.trim();
+                let lname = document.getElementById("ln").value.trim();
+                let nameRegex = /^[a-zA-Z ]+$/;
+            
+                if (!nameRegex.test(fname)) {
+                    alert("First name can only contain letters and spaces.");
+                    return false;
+                }
+            
+                if (mname !== "" && !nameRegex.test(mname)) {
+                    alert("Middle name can only contain letters and spaces.");
+                    return false;
+                }
+            
+                if (!nameRegex.test(lname)) {
+                    alert("Last name can only contain letters and spaces.");
+                    return false;
+                }
+            
+                return true;
+            }
             
             if (pass1 == "" ) {
                 document.getElementById("er_pass1").innerHTML="enter password";

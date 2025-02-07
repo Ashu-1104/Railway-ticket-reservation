@@ -1,47 +1,104 @@
 <?php 
- 
-    // registration page
-    include('DBConnection.php'); 
- 
-if(isset($_POST['register'])){
-    //$err_uname="";
-    $uname = $_POST['username'];
-    $pass = $_POST['password1'];
-    //$pass = $_POST['password2'];
-    $secque = $_POST['secque'];
-    $secans = $_POST['secans'];
-    $fname = $_POST['fname'];
-    $mname = $_POST['mname'];
-    $lname = $_POST['lname'];
-    $gender = $_POST['gender'];
-    $dob = $_POST['dob'];
-    $email = $_POST['email'];
-    $phno = $_POST['phno'];
+include('DBConnection.php'); 
 
+if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['register'])) {
+    $uname = trim($_POST['username']);
+    $pass1 = trim($_POST['password1']);
+    $pass2 = trim($_POST['password2']);
+    $secque = trim($_POST['secque']);
+    $secans = trim($_POST['secans']);
+    $fname = trim($_POST['fname']);
+    $mname = trim($_POST['mname']);
+    $lname = trim($_POST['lname']);
+    $gender = trim($_POST['gender']);
+    $dob = trim($_POST['dob']);
+    $email = trim($_POST['email']);
+    $phno = trim($_POST['phno']);
 
+    $errors = [];
 
-    // query for checked whether username is already registered or not
-    $sql_uname = "SELECT *FROM user where username = '$uname'";
-    $result = $conn->query($sql_uname);
-    if( $result->num_rows > 0 ){
-        $err_uname= "Username is already registered";
+    // Check required fields
+    if (empty($uname) || empty($pass1) || empty($pass2) || empty($secque) || empty($secans) || 
+        empty($fname) || empty($lname) || empty($gender) || empty($dob) || empty($email) || empty($phno)) {
+        $errors[] = "All fields are required.";
     }
-    else{
-        $sql="INSERT INTO user (username, password, first_name, middle_name, last_name, gender, date_of_birth, email, mobile_number, security_question, security_answare) VALUES ( '$uname', '$pass', '$fname', '$mname', '$lname', '$gender', '$dob', '$email', '$phno','$secque', '$secans')";
-        
 
-        if($conn->query($sql)== TRUE){
-          echo "<script>console.log('Now, you can book your journey');</script>";
+    // Email validation
+    if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+        $errors[] = "Invalid email format.";
+    }
+
+    // Phone number validation (must be exactly 10 digits)
+    if (!preg_match("/^[0-9]{10}$/", $phno)) {
+        $errors[] = "Phone number must be exactly 10 digits.";
+    }
+
+    // Password validation
+    if ($pass1 !== $pass2) {
+        $errors[] = "Passwords do not match.";
+    }
+
+    if (!preg_match("/^(?=.*[A-Z])(?=.*[a-z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/", $pass1)) {
+        $errors[] = "Password must contain at least one uppercase letter, one lowercase letter, one digit, one special character, and be at least 8 characters long.";
+    }
+
+    // Name validation (only letters and spaces)
+    if (!preg_match("/^[a-zA-Z ]*$/", $fname)) {
+        $errors[] = "First name can only contain letters and spaces.";
+    }
+
+    if (!empty($mname) && !preg_match("/^[a-zA-Z ]*$/", $mname)) {
+        $errors[] = "Middle name can only contain letters and spaces.";
+    }
+
+    if (!preg_match("/^[a-zA-Z ]*$/", $lname)) {
+        $errors[] = "Last name can only contain letters and spaces.";
+    }
+
+    // Date of birth validation (user must be at least 18 years old)
+    $dobDate = DateTime::createFromFormat('Y-m-d', $dob);
+    $currentDate = new DateTime();
+    $age = $currentDate->diff($dobDate)->y;
+
+    if ($age < 18) {
+        $errors[] = "You must be at least 18 years old to register.";
+    }
+
+    // Display errors if found
+    if (!empty($errors)) {
+        foreach ($errors as $error) {
+            echo "<script>alert('$error');</script>";
         }
-        else{
-           echo "<script>alert('errrrrr');</script>";
+    } else {
+        // Check if username exists
+        $stmt = $conn->prepare("SELECT * FROM user WHERE username = ?");
+        $stmt->bind_param("s", $uname);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        
+        if ($result->num_rows > 0) {
+            echo "<script>alert('Username is already registered');</script>";
+        } else {
+            // Secure password hashing
+            $hashed_pass = password_hash($pass1, PASSWORD_BCRYPT);
+            $hashed_secans = password_hash($secans, PASSWORD_BCRYPT);
 
+            // Insert data securely
+            $stmt = $conn->prepare("INSERT INTO user 
+                (username, password, first_name, middle_name, last_name, gender, date_of_birth, email, mobile_number, security_question, security_answare) 
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+
+            $stmt->bind_param("sssssssssss", $uname, $hashed_pass, $fname, $mname, $lname, $gender, $dob, $email, $phno, $secque, $hashed_secans);
+
+            if ($stmt->execute()) {
+                echo "<script>alert('Registration successful! Now, you can book your journey.');</script>";
+            } else {
+                echo "<script>alert('Registration failed. Please try again.');</script>";
+            }
         }
     }
 }
-
 ?>
-
 
 
 <!doctype html>
@@ -96,6 +153,10 @@ if(isset($_POST['register'])){
             color: #333;
             font-family: serif;
         }
+        .error {
+            color: red;
+        }
+
     </style>
 
 </head>
@@ -137,7 +198,9 @@ if(isset($_POST['register'])){
 
             <div class="col-12 col-sm-6 col-md-3 ">
                 <div class="text-main input-group">
-                    <input class="form-control" type="text" id="uname" name="username">
+                <input class="form-control" type="text" id="uname" name="username" value="<?php echo isset($uname) ? htmlspecialchars($uname) : ''; ?>">
+                <span class="error"><?php echo isset($errors['username']) ? $errors['username'] : ''; ?></span>
+
                 </div>
                 <!-- error code -->
                 <div class="text-red">
@@ -154,7 +217,9 @@ if(isset($_POST['register'])){
 
             <div class="col-12 col-sm-6 col-md-3">
                 <div class="text-main input-group">
-                    <input class="form-control" type="password" id="pass1" name="password1">
+                <input class="form-control" type="password" id="pass1" name="password1">
+                <span class="error"><?php echo isset($errors['password1']) ? $errors['password1'] : ''; ?></span>
+
                 </div>
                 <!-- er_pass1 code -->
                 <div  class="text-red">
@@ -178,7 +243,9 @@ if(isset($_POST['register'])){
 
             <div class="col-12 col-sm-6 col-md-3">
                 <div class="text-main input-group">
-                    <input class="form-control" type="password" id="pass2" name="password2">
+                <input class="form-control" type="password" id="pass2" name="password2">
+                <span class="error"><?php echo isset($errors['password2']) ? $errors['password2'] : ''; ?></span>
+
                 </div>
                 <!-- er_pass2 code -->
                 <div  class="text-red">
@@ -252,7 +319,8 @@ if(isset($_POST['register'])){
             <!-- input field of names -->
             <div class="col-12 col-sm-3 col-md-3 ">
                 <div class="text-main input-group">
-                    <input class="form-control" type="text" id="fn" name="fname" placeholder="First Name">
+                <input type="text" id="fn" name="fname" oninput="validateName('fn', 'fname-error')" placeholder="First Name" class="form-control">
+                <span id="fname-error" class="error"></span>
                 </div>
                 <!-- er_fname code -->
                 <div  class="text-red">
@@ -262,7 +330,8 @@ if(isset($_POST['register'])){
 
             <div class="col-12 col-sm-3 col-md-3 ">
                 <div class="text-main input-group">
-                    <input class="form-control" type="text" id="mn" name="mname" placeholder="Middle Name">
+                <input type="text" id="mn" name="mname" oninput="validateName('mn', 'mname-error')" placeholder="Middle Name" class="form-control">
+                <span id="mname-error" class="error"></span>
                 </div>
                 <!-- er_fname code -->
                 <div  class="text-red">
@@ -272,7 +341,8 @@ if(isset($_POST['register'])){
 
             <div class="col-12 col-sm-3 col-md-3 ">
                 <div class="text-main input-group">
-                    <input class="form-control" type="text" id="ln" name="lname" placeholder="Last Name">
+                <input type="text" id="ln" name="lname" oninput="validateName('ln', 'lname-error')"placeholder="Last Name" class="form-control">
+                <span id="lname-error" class="error"></span>
                 </div>
                 <!-- er_fname code -->
                 <div  class="text-red">
@@ -312,15 +382,14 @@ if(isset($_POST['register'])){
                     <span class="text-main">&nbsp;&nbsp;Female</span>
                 </div>
             </div>
-
-            <!-- Transgender -->
-            <!-- <div class="col-12 col-sm-4">
+            <div class="col-12 col-sm-4">
                 <div class="text-main input-group">
-                    <input class="" type="radio" name="gender" value="male">
-                    <span class="text-main">&nbsp;&nbsp;Transgender</span>
+                    <input class="" type="radio" name="gender" value="O" required>
+                    <span class="text-main">&nbsp;&nbsp;Other</span>
                 </div>
-            </div> -->
-
+            </div>
+            <!-- input field ends -->
+            
 
     <!-- 6th row ends -->
 
@@ -338,7 +407,9 @@ if(isset($_POST['register'])){
             <!-- input tag -->
             <div class="col-12 col-sm-3">
                 <div class="text-main input-group">
-                    <input class="form-control" type="date" id="date" name="dob">
+                <input class="form-control" type="date" id="dob" name="dob" value="<?php echo isset($dob) ? htmlspecialchars($dob) : ''; ?>">
+                <span class="error"><?php echo isset($errors['dob']) ? $errors['dob'] : ''; ?></span>
+
                 </div>
 
                 <!-- error code -->
@@ -362,7 +433,9 @@ if(isset($_POST['register'])){
             <!-- email input-->
             <div class="col-12 col-sm-6 col-md-3">
                 <div class="text-main input-group">
-                    <input class="form-control" type="text" id="mail" name="email">
+                <input class="form-control" type="email" id="email" name="email" value="<?php echo isset($email) ? htmlspecialchars($email) : ''; ?>">
+                <span class="error"><?php echo isset($errors['email']) ? $errors['email'] : ''; ?></span>
+
                 </div>
 
                 <!-- error code -->
@@ -385,7 +458,9 @@ if(isset($_POST['register'])){
                 <div class="input-group-prepend">
                     <span class="input-group-text alert-dark text-dark">+91</span>
                 </div>
-                    <input class="form-control" type="text" id="mono" maxlength="10" name="phno">
+                <input class="form-control" type="text" id="phno" name="phno" value="<?php echo isset($phno) ? htmlspecialchars($phno) : ''; ?>">
+                <span class="error"><?php echo isset($errors['phno']) ? $errors['phno'] : ''; ?></span>
+
                 </div>
 
                 <!-- error code -->
@@ -423,6 +498,99 @@ if(isset($_POST['register'])){
 
     <!-- Footer -->
     <?php include('footer.html') ?>
+        <script>
+            function validateName(fieldId, errorId) {
+                let nameInput = document.getElementById(fieldId);
+                let errorSpan = document.getElementById(errorId);
+                let nameRegex = /^[a-zA-Z ]+$/;
+
+                if (nameInput.value.trim() === "") {
+                    errorSpan.textContent = "This field is required.";
+                } else if (!nameRegex.test(nameInput.value)) {
+                    errorSpan.textContent = "Only letters and spaces are allowed.";
+                } else {
+                    errorSpan.textContent = ""; // Clear error if valid
+                }
+            }
+
+            function validation() {
+                validateName('fn', 'fname-error');
+                validateName('mn', 'mname-error');
+                validateName('ln', 'lname-error');
+
+                // Check if any error exists before submitting
+                let errors = document.querySelectorAll('.error');
+                for (let error of errors) {
+                    if (error.textContent !== "") {
+                        return false; // Prevent form submission
+                    }
+                }
+
+                return true;
+            }
+
+            document.addEventListener("DOMContentLoaded", function() {
+    document.getElementById("regForm").addEventListener("submit", function(event) {
+        let isValid = true;
+
+        // Clear previous errors
+        document.querySelectorAll(".error").forEach(e => e.innerText = "");
+
+        // Username Validation
+        let uname = document.getElementById("uname").value.trim();
+        if (uname === "") {
+            document.getElementById("er_uname").innerText = "Username is required.";
+            isValid = false;
+        }
+
+        // Password Validation
+        let pass1 = document.getElementById("pass1").value.trim();
+        let pass2 = document.getElementById("pass2").value.trim();
+        if (pass1 === "") {
+            document.getElementById("er_pass1").innerText = "Password is required.";
+            isValid = false;
+        } else if (!/^(?=.*[A-Z])(?=.*[a-z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/.test(pass1)) {
+            document.getElementById("er_pass1").innerText = "Password must have at least 8 characters, 1 uppercase, 1 lowercase, 1 number, and 1 special character.";
+            isValid = false;
+        }
+
+        if (pass1 !== pass2) {
+            document.getElementById("er_pass2").innerText = "Passwords do not match.";
+            isValid = false;
+        }
+
+        // Email Validation
+        let email = document.getElementById("email").value.trim();
+        if (email === "") {
+            document.getElementById("er_email").innerText = "Email is required.";
+            isValid = false;
+        } else if (!/^\S+@\S+\.\S+$/.test(email)) {
+            document.getElementById("er_email").innerText = "Invalid email format.";
+            isValid = false;
+        }
+
+        // Phone Number Validation
+        let phno = document.getElementById("phno").value.trim();
+        if (phno === "" || !/^\d{10}$/.test(phno)) {
+            document.getElementById("er_phno").innerText = "Phone number must be exactly 10 digits.";
+            isValid = false;
+        }
+
+        // Date of Birth Validation
+        let dob = document.getElementById("dob").value;
+        if (dob === "") {
+            document.getElementById("er_dob").innerText = "Date of Birth is required.";
+            isValid = false;
+        }
+
+        if (!isValid) {
+            event.preventDefault(); // Prevent form submission if validation fails
+        }
+    });
+});
+
+
+</script>
 	
 </body>
 </html>
